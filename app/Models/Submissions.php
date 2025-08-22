@@ -3,34 +3,46 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Submissions extends Model
 {
-     protected $primaryKey = 'question_id';
+    use HasFactory;
+
+    // Pastikan nama tabel sesuai
+    protected $table = 'submissions';
+
+    // PK yang benar untuk submissions
+    protected $primaryKey = 'submission_id';
     public $incrementing = false;
     protected $keyType = 'string';
 
+    // Kolom yang boleh diisi
     protected $fillable = [
         'submission_id',
         'nomor_identitas',
         'assessment_id',
         'file_url_jawaban',
+        'user_identifier'
     ];
+
+    // Agar route model binding pakai submission_id
+    public function getRouteKeyName()
+    {
+        return 'submission_id';
+    }
+
+    // Auto-generate ID: S0001, S0002, ...
     protected static function boot()
     {
         parent::boot();
 
         static::creating(function ($model) {
-            $last = self::orderBy('question_id', 'desc')->first();
-
-            if ($last) {
-                $lastNumber = (int) str_replace('Q', '', $last->question_id);
-                $newNumber  = $lastNumber + 1;
-            } else {
-                $newNumber = 1;
+            if (!$model->submission_id) {
+                $last = self::orderBy('submission_id', 'desc')->first();
+                $next = $last ? ((int) substr($last->submission_id, 1)) + 1 : 1;
+                $model->submission_id = 'S' . str_pad($next, 4, '0', STR_PAD_LEFT);
             }
-
-            $model->question_id = 'Q' . str_pad($newNumber, 3, '0', STR_PAD_LEFT);
         });
     }
 }
