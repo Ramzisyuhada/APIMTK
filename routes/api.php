@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::apiResource('answers',AnswerController::class);
-Route::apiResource('grade',GradeController::class);
+Route::apiResource('grades', GradeController::class); // <-- plural & tanpa slash
 Route::get('ping', fn() => response()->json(['pong' => true]));
 
 Route::post('probe', function (Request $r) {

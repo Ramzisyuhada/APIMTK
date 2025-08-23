@@ -11,6 +11,7 @@ class AuthController extends Controller
 {
      public function login(Request $request)
     {
+
         $request->validate([
             'user_identifier' => 'required',
             'password'        => 'required',
@@ -30,7 +31,7 @@ class AuthController extends Controller
             'user' => [
                 'user_identifier' => $user->user_identifier,
                 'name'  => $user->name,
-                'role'  => $user->role,  
+                'role'  => $user->role,
             ]
         ]);
     }

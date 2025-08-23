@@ -39,7 +39,7 @@ class Grade extends Model
     }
 
     // RELATIONS
-    public function submission() { return $this->belongsTo(Submission::class, 'submission_id', 'submission_id'); }
+    public function submission() { return $this->belongsTo(Submissions::class, 'submission_id', 'submission_id'); }
     public function user() { return $this->belongsTo(User::class, 'user_identifier', 'user_identifier'); }
     // public function assessment() { return $this->belongsTo(Assessment::class, 'assessment_id', 'assessment_id'); } // kalau kolomnya ada
 }

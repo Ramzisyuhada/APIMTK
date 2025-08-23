@@ -14,6 +14,7 @@ class AnswerController extends Controller
         return response()->json(
             Answer::with(['question', 'submission'])->get()
         );
+
     }
 
     /**
@@ -29,6 +30,8 @@ class AnswerController extends Controller
      */
     public function store(Request $request)
     {
+
+
         $data = $request->validate([
             'submission_id' => 'required|string',
             'question_id'   => 'required|string',
