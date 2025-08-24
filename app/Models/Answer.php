@@ -18,6 +18,8 @@ class Answer extends Model
         'submission_id',
         'question_id',
         'answer_text',
+                'user_identifier',
+
     ];
 
     // Relasi ke Submission
@@ -31,6 +33,12 @@ class Answer extends Model
     {
         return $this->belongsTo(Question::class, 'question_id', 'question_id');
     }
+
+public function user()
+{
+    return $this->belongsTo(User::class, 'user_identifier', 'user_identifier');
+}
+
 
     // AUTO GENERATE ID: AN0001, AN0002, dst
     protected static function boot()

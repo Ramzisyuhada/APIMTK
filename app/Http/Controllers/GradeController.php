@@ -1,122 +1,145 @@
 <?php
 
 namespace App\Http\Controllers;
-use Illuminate\Support\Facades\DB;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use App\Models\Grade;
-use App\Models\Submissions; // ← singular
+use App\Models\Submission; // <-- singular
 use App\Models\User;
 
 class GradeController extends Controller
 {
     /**
-     * Display a listing of the resource.
+     * GET /api/grades
      */
-    public function index()
-    {
-                $grades = Grade::with(['submission', 'user'])
-            ->orderBy('score', 'desc')
-            ->get();
+public function index(Request $request)
+{
+    $q = Grade::with(['submission', 'user'])
+        ->orderByDesc('score')
+        ->orderByDesc('updated_at');
 
-        return response()->json([
-            'status'  => true,
-            'message' => 'OK',
-            'data'    => $grades,
-        ], 200);
-
+    // Filter berdasarkan assessment_id
+    if ($request->filled('assessment_id')) {
+        $q->whereHas('submission', function ($sub) use ($request) {
+            $sub->where('assessment_id', $request->assessment_id);
+        });
     }
 
+    // Filter hanya jika ada jawaban di tabel Answer
+    $q->whereHas('submission.answers');
 
-    public function create()
-    {
-        //
-    }
+    $grades = $q->get();
+
+    return response()->json([
+        'status'  => true,
+        'message' => 'OK',
+        'data'    => $grades,
+    ], 200);
+}
+
+
 
     /**
-     * Store a newly created resource in storage.
+     * POST /api/grades
+     * Buat / update nilai untuk kombinasi (submission_id, user_identifier)
      */
     public function store(Request $request)
     {
-        $data =  $request->validate([
-            'submission_id' => 'required|string',
-            'user_identifier' => 'required|string',
-            'score' => 'required|decimal:1,2'
+        $data = $request->validate([
+            'submission_id'   => ['required', 'string', 'exists:submissions,submission_id'],
+            'user_identifier' => ['required', 'string', 'exists:users,user_identifier'],
+            'score'           => ['required', 'numeric', 'between:0,100'],
         ]);
 
+        $grade = DB::transaction(function () use ($data) {
+            // Pastikan relasi ada (kalau mau ‘create kalau tidak ada’, buka komentar firstOrCreate)
+            // Submission::firstOrCreate(
+            //     ['submission_id' => $data['submission_id']],
+            //     ['user_identifier' => $data['user_identifier']]
+            // );
 
-        return DB::transaction(function () use ($data) {
-            $submission = Submissions::firstOrCreate(
-                ['submission_id' => $data['submission_id']],
-                ['user_id' => 1] // sesuaikan default-mu
-            );
-
-            $grade = User::firstOrCreate(
-                ['user_identifier' => $data['user_identifier']],
-                ['question_text' => '1729910']
-            );
-
-        return response()->json(['success'=>true,'data'=>$grade], 201);
-
-
+            // Update atau buat grade untuk pasangan (submission_id, user_identifier)
+            return Grade::updateOrCreate(
+                [
+                    'submission_id'   => $data['submission_id'],
+                    'user_identifier' => $data['user_identifier'],
+                ],
+                [
+                    'score' => round((float) $data['score'], 2),
+                ]
+            )->load(['submission', 'user']);
         });
+
+        return response()->json([
+            'success' => true,
+            'data'    => $grade,
+        ], 201);
     }
 
     /**
-     * Display the specified resource.
+     * GET /api/grades/{grade}
+     * Pastikan di model Grade ada:
+     *   public function getRouteKeyName() { return 'grade_id'; }
+     * supaya /api/grades/G_001 bekerja
      */
-   public function show(Grade $grade)
-{
-    // pastikan di Grade ada getRouteKeyName() => 'grade_id' supaya /api/grades/G_001 bisa
-    $grade->load(['submission','user']);
-    return response()->json($grade, 200);
-}
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
+    public function show(Grade $grade)
     {
-        //
+        $grade->load(['submission', 'user']);
+
+        return response()->json([
+            'success' => true,
+            'data'    => $grade,
+        ], 200);
     }
 
     /**
-     * Update the specified resource in storage.
+     * PUT/PATCH /api/grades/{grade}
+     * Hanya update score jika dikirim
      */
-   public function update(Request $request, Grade $grade)
+    public function update(Request $request, Grade $grade)
     {
         $data = $request->validate([
-            'submission_id'   => 'sometimes|string|exists:submissions,submission_id',
-            'user_identifier' => 'sometimes|string|exists:users,user_identifier', // hapus rule exists ini jika users tidak punya kolom user_identifier
-            'score'           => 'sometimes|decimal:1,2',
+            'score' => ['sometimes', 'nullable', 'numeric', 'between:0,100'],
         ]);
 
-        return DB::transaction(function () use ($data, $grade) {
-            if (array_key_exists('submission_id', $data)) {
-                $grade->submission_id = $data['submission_id'];
-            }
-            if (array_key_exists('user_identifier', $data)) {
-                $grade->user_identifier = $data['user_identifier'];
-            }
-            if (array_key_exists('score', $data)) {
-                $grade->score = $data['score'];
-            }
-
-            $grade->save();
-
+        if (! $request->has('score')) {
             return response()->json([
-                'success' => true,
+                'success' => false,
+                'message' => 'Tidak ada field yang diupdate.',
+            ], 400);
+        }
 
-            ], 200);
-        });
+        if (array_key_exists('score', $data)) {
+            $grade->score = is_null($data['score'])
+                ? null
+                : round((float) $data['score'], 2);
+        }
+
+        if ($grade->isDirty()) {
+            $grade->save();
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'grade_id'   => $grade->grade_id ?? null,
+                'score'      => $grade->score,
+                'updated_at' => $grade->updated_at,
+            ],
+        ], 200);
     }
 
-
     /**
-     * Remove the specified resource from storage.
+     * DELETE /api/grades/{grade}
      */
-    public function destroy(string $id)
+    public function destroy(Grade $grade)
     {
-        //
+        $grade->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Grade dihapus.',
+        ], 200);
     }
 }

@@ -24,14 +24,21 @@ class Submissions extends Model
         'assessment_id',
         'file_url_jawaban',
         'user_identifier'
-    ];
 
+    ];
+  public function user()
+    {
+        return $this->belongsTo(User::class, 'user_identifier', 'user_identifier');
+    }
     // Agar route model binding pakai submission_id
     public function getRouteKeyName()
     {
         return 'submission_id';
     }
-
+ public function answers()
+    {
+        return $this->hasMany(Answer::class, 'submission_id', 'submission_id');
+    }
     // Auto-generate ID: S0001, S0002, ...
     protected static function boot()
     {

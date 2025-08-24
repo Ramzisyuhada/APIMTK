@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 use Illuminate\Support\Facades\DB;
 use App\Models\Submissions;
 use App\Models\Question;
+use App\Models\Answer;
 
 use Illuminate\Http\Request;
 class AnswerController extends Controller
@@ -63,11 +64,27 @@ class AnswerController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
-    {
+  public function show($id)
+{
+    $answer = Answer::with(['submission.user', 'question'])
+        ->where('submission_id', $id)
+           ->get();;
 
-
+    if (!$answer) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Data tidak ditemukan',
+            'data'    => null
+        ], 404);
     }
+
+    return response()->json([
+        'success' => true,
+        'data'    => $answer,
+    ], 200);
+}
+
+
 
     /**
      * Show the form for editing the specified resource.
