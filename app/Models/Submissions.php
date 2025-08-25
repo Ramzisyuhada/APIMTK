@@ -48,7 +48,7 @@ class Submissions extends Model
             if (!$model->submission_id) {
                 $last = self::orderBy('submission_id', 'desc')->first();
                 $next = $last ? ((int) substr($last->submission_id, 1)) + 1 : 1;
-                $model->submission_id = 'S' . str_pad($next, 4, '0', STR_PAD_LEFT);
+                $model->submission_id = 'S' . str_pad($next, 3, '0', STR_PAD_LEFT);
             }
         });
     }

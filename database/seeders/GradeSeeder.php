@@ -18,6 +18,8 @@ class GradeSeeder extends Seeder
         $rows = [
             ['grade_id' => 'G_001', 'submission_id' => 'S001', 'user_identifier' => '1829310', 'score' => 90, 'created_at' => $now, 'updated_at' => $now],
             ['grade_id' => 'G_002', 'submission_id' => 'S002', 'user_identifier' => '1829310', 'score' => 90, 'created_at' => $now, 'updated_at' => $now],
+            ['grade_id' => 'G_003', 'submission_id' => 'S003', 'user_identifier' => '9929910', 'score' => 0, 'created_at' => $now, 'updated_at' => $now],
+
         ];
 
         DB::table('grades')->upsert($rows, ['grade_id']);

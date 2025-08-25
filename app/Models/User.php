@@ -22,6 +22,8 @@ class User extends Authenticatable
         'phone',
         'gender',   // tambah gender sesuai sheet
         'role',
+        'gayabelajar',
+
         'password',
     ];
 
