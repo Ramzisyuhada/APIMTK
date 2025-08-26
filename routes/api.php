@@ -7,6 +7,8 @@ use App\Http\Controllers\GradeController;
 use App\Http\Controllers\PresignController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\SubmissionsController;
+use App\Http\Controllers\AssessmentController;
+use App\Http\Controllers\QuestionsController;
 
 use Illuminate\Http\Request;
 
@@ -17,6 +19,10 @@ Route::get('answers/by-submission/{submission_id}', [AnswerController::class, 's
      ->name('answers.bySubmission');
 Route::apiResource('grades', GradeController::class); // <-- plural & tanpa slash
 Route::apiResource('submissions', SubmissionsController::class); // <-- plural & tanpa slash
+Route::apiResource('assessment', AssessmentController::class); // <-- plural & tanpa slash
+Route::apiResource('questions', QuestionsController::class);
+//Route::get('questions/{question_id}', [QuestionsController::class, 'showByID']); // <-- plural & tanpa slash
+
 Route::get('/submissions/find', [SubmissionsController::class, 'findByUserAndAssessment']);
 Route::post('/submissions/find', [SubmissionsController::class, 'findByUserAndAssessment']);
 

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class Question extends Model
 {
      use HasFactory;
+    protected $table = 'questions'; // pastikan nama tabel (opsional kalau konvensi)
 
     // Primary key bukan auto increment
     protected $primaryKey = 'question_id';
@@ -20,6 +21,10 @@ class Question extends Model
         'question_number',
         'question_text',
     ];
+public function getRouteKeyName()
+{
+    return 'question_id';
+}
 
     // Auto-generate question_id: Q001, Q002, dst
     protected static function boot()

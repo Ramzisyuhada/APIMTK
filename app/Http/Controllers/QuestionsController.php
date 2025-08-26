@@ -36,8 +36,15 @@ class QuestionsController extends Controller
      */
     public function show(string $id)
     {
-        $Pertannyaan = Question::all();
-    }
+        $post = Question::findOrFail($id);
+        return response()->json(['success'=>true,'data' => $post],200);    }
+
+
+    // public function showByID(string $id)
+    // {
+    //       $post = Question::findOrFail($id);
+    //     return response()->json(['success'=>true,'data' => $post],200);
+    // }
 
     /**
      * Show the form for editing the specified resource.
@@ -50,11 +57,20 @@ class QuestionsController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, Question $question)
     {
-        //
-    }
+        // kalau PUT: biasanya required semua. Kalau PATCH: partial.
+        $data = $request->validate([
+            'question_text'   => 'sometimes|required|string',
+        ]);
 
+        $question->update($data);
+
+        return response()->json([
+            'success' => true,
+            'data'    => $question
+        ], 200);
+    }
     /**
      * Remove the specified resource from storage.
      */
