@@ -85,6 +85,35 @@ class AnswerController extends Controller
 }
 
 
+public function showBySubmission(Request $request, $submission_id)
+{
+    // Jika ada user_identifier + assessment_id, pakai itu untuk resolve submission sebenarnya
+    if ($request->filled('user_identifier') && $request->filled('assessment_id')) {
+        $resolved = Submissions::where('user_identifier', $request->user_identifier)
+            ->where('assessment_id',   $request->assessment_id)
+            ->value('submission_id');
+
+        if (!empty($resolved)) {
+            $submission_id = $resolved; // override S001 yang salah
+        }
+    }
+
+    $answers = Answer::with(['submission.user','question'])
+        ->where('submission_id', $submission_id)
+        ->when($request->filled('assessment_id'), function ($q) use ($request) {
+            $q->whereHas('submission', fn($sub) => $sub->where('assessment_id', $request->assessment_id));
+        })
+        ->when($request->filled('user_identifier'), function ($q) use ($request) {
+            $q->whereHas('submission', fn($sub) => $sub->where('user_identifier', $request->user_identifier));
+        })
+        ->get();
+
+    return response()->json([
+        'success' => true,
+        'count'   => $answers->count(),
+        'data'    => $answers,
+    ], 200);
+}
 
     /**
      * Show the form for editing the specified resource.

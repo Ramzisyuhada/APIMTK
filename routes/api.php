@@ -13,6 +13,8 @@ use Illuminate\Http\Request;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::apiResource('answers',AnswerController::class);
+Route::get('answers/by-submission/{submission_id}', [AnswerController::class, 'showBySubmission'])
+     ->name('answers.bySubmission');
 Route::apiResource('grades', GradeController::class); // <-- plural & tanpa slash
 Route::apiResource('submissions', SubmissionsController::class); // <-- plural & tanpa slash
 Route::get('/submissions/find', [SubmissionsController::class, 'findByUserAndAssessment']);
