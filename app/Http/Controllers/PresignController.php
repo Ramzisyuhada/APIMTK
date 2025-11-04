@@ -1,32 +1,32 @@
 <?php
 
 namespace App\Http\Controllers;
-use Aws\S3\S3Client;
-use App\Http\Controllers\Controller;
+
 use Illuminate\Http\Request;
+use Google\Cloud\Storage\StorageClient;
+use RuntimeException;
 
 class PresignController extends Controller
 {
-       private function s3()
-{
-    $region = env('AWS_DEFAULT_REGION', 'us-east-1'); // bucket kamu di us-east-1
-    $key    = env('AWS_ACCESS_KEY_ID');
-    $secret = env('AWS_SECRET_ACCESS_KEY');
+    private function gcs()
+    {
+        $projectId = env('GCP_PROJECT_ID');
+        $keyFile   = env('GCP_KEY_FILE');
 
-    if (empty($key) || empty($secret)) {
-        throw new RuntimeException("AWS creds kosong. Cek .env (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY).");
+        if (empty($projectId) || empty($keyFile) || !file_exists($keyFile)) {
+            throw new RuntimeException("GCP creds kosong atau tidak valid. Cek .env (GCP_PROJECT_ID / GCP_KEY_FILE).");
+        }
+
+        return new StorageClient([
+            'projectId'   => $projectId,
+            'keyFilePath' => $keyFile,
+        ]);
     }
 
-    return new S3Client([
-        'version'     => 'latest',
-        'region'      => $region,
-        'credentials' => ['key' => $key, 'secret' => $secret],
-    ]);
-}
-
-    public function upload(Request $req) {
+    public function upload(Request $req)
+    {
         $data = $req->validate([
-            'key' => 'required|string',
+            'key'         => 'required|string',
             'contentType' => 'required|string|in:application/pdf',
         ]);
 
@@ -35,64 +35,75 @@ class PresignController extends Controller
             return response()->json(['error' => 'Key must end with .pdf'], 400);
         }
 
-        // sanitize filename
-        $base = basename($data['key']);
-        $safe = preg_replace('/[^a-zA-Z0-9._-]/', '_', $base);
+        // sanitize nama file
+        $base    = basename($data['key']);
+        $safe    = preg_replace('/[^a-zA-Z0-9._-]/', '_', $base);
         $safeKey = "uploads/pdf/" . $safe;
 
-        $cmd = $this->s3()->getCommand('PutObject', [
-            'Bucket' => 'bucketmtk',
-            'Key' => $safeKey,
-            'ContentType' => 'application/pdf',
-        ]);
-        $reqUrl = $this->s3()->createPresignedRequest($cmd, '+5 minutes');
-        return response()->json([
-            'url' => (string)$reqUrl->getUri(),
-            'key' => $safeKey
-        ]);
-    }
-     public function download(Request $req)
-    {
-        $data = $req->validate([
-            'key'        => 'required|string',       // contoh: uploads/pdf/namafile.pdf
-            'filename'   => 'nullable|string',       // opsional: nama file saat di-save
-            'disposition'=> 'nullable|in:inline,attachment', // default attachment
-        ]);
+        $bucketName = env('GCS_BUCKET');
+        $storage    = $this->gcs();
+        $bucket     = $storage->bucket($bucketName);
+        $object     = $bucket->object($safeKey);
 
-        $bucket      = env('AWS_BUCKET', 'bucketmtk');
-        $key         = $data['key'];
-        $filename    = $data['filename'] ?? basename($key);
-        $disposition = $data['disposition'] ?? 'attachment';
-
-        $s3 = $this->s3();
-
-        // Cek objek ada (biar kalau salah key, balas 404, bukan 500)
-        try {
-            $s3->headObject(['Bucket' => $bucket, 'Key' => $key]);
-        } catch (AwsException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'File tidak ditemukan di S3: '.$key,
-                'aws'     => $e->getAwsErrorMessage(),
-            ], 404);
-        }
-
-        // Presign GET dengan header respons yang pas agar ter-download sebagai PDF
-        $cmd = $s3->getCommand('GetObject', [
-            'Bucket' => $bucket,
-            'Key'    => $key,
-            'ResponseContentType'        => 'application/pdf',
-            'ResponseContentDisposition' => $disposition.'; filename="'.addslashes($filename).'"',
-        ]);
-
-        $request = $s3->createPresignedRequest($cmd, '+5 minutes');
+        // Buat signed URL untuk upload (PUT)
+        $url = $object->signedUrl(
+            now()->addMinutes(5)->toDateTime(),
+            [
+                'version'     => 'v4',
+                'method'      => 'PUT',
+                'contentType' => 'application/pdf',
+            ]
+        );
 
         return response()->json([
-            'success'    => true,
-            'url'        => (string)$request->getUri(),
+            'url'        => $url,
+            'key'        => $safeKey,
+            'method'     => 'PUT',
+            'headers'    => ['Content-Type' => 'application/pdf'],
             'expires_in' => 300,
         ]);
     }
 
+    public function download(Request $req)
+    {
+        $data = $req->validate([
+            'key'         => 'required|string',        // contoh: uploads/pdf/namafile.pdf
+            'filename'    => 'nullable|string',        // opsional: nama file saat di-save
+            'disposition' => 'nullable|in:inline,attachment', // default attachment
+        ]);
 
+        $bucketName  = env('GCS_BUCKET');
+        $key         = $data['key'];
+        $filename    = $data['filename'] ?? basename($key);
+        $disposition = $data['disposition'] ?? 'attachment';
+
+        $storage = $this->gcs();
+        $bucket  = $storage->bucket($bucketName);
+        $object  = $bucket->object($key);
+
+        // Cek apakah file ada
+        if (!$object->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'File tidak ditemukan di GCS: ' . $key,
+            ], 404);
+        }
+
+        // Signed URL untuk download (GET)
+        $url = $object->signedUrl(
+            now()->addMinutes(5)->toDateTime(),
+            [
+                'version'             => 'v4',
+                'method'              => 'GET',
+                'responseType'        => 'application/pdf',
+                'responseDisposition' => $disposition . '; filename="' . addslashes($filename) . '"',
+            ]
+        );
+
+        return response()->json([
+            'success'    => true,
+            'url'        => $url,
+            'expires_in' => 300,
+        ]);
+    }
 }
