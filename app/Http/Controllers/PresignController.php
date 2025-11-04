@@ -26,63 +26,52 @@ class PresignController extends Controller
     // POST /api/presign/upload  { key: "nama.pdf", contentType: "application/pdf" }
    // use Google\Cloud\Storage\StorageClient;
 
-public function upload(Request $req)
-{
-    $data = $req->validate([
-        'key'         => 'required|string',
-        'contentType' => 'required|string|in:application/pdf',
-    ]);
+ public function upload(Request $req)
+    {
+        $key = $req->string('key')->toString();
+        $contentType = $req->string('contentType', 'application/octet-stream')->toString();
 
-    // amankan nama file
-    $base    = basename($data['key']);
-    $safe    = preg_replace('/[^a-zA-Z0-9._-]/', '_', $base);
-    $safeKey = 'uploads/pdf/' . $safe;
+        // Validasi env
+        $project = env('GCP_PROJECT_ID');
+        $keyFile = env('GCP_KEY_FILE');
+        $bucket  = env('GCS_BUCKET');
+        $signer  = env('GCS_SIGNING_EMAIL'); // harus sama dengan client_email di JSON
 
-    $storage = $this->gcs(); // method kamu sendiri
-    $bucket  = $storage->bucket(env('GCS_BUCKET'));
-    $object  = $bucket->object($safeKey);
+        if (!$project || !$keyFile || !is_readable($keyFile) || !$bucket) {
+            throw new \RuntimeException('GCP creds tidak valid. Cek GCP_PROJECT_ID / GCP_KEY_FILE.');
+        }
 
-    // pakai UTC biar aman
-    $expires = (new \DateTime('now', new \DateTimeZone('UTC')))
-                ->add(new \DateInterval('PT5M'));
-
-    // SIGN HANYA HEADER2 berikut (lowercase):
-    $url = $object->signedUrl($expires, [
-        'version' => 'v4',
-        'method'  => 'PUT',
-        'headers' => [
-            'content-type'          => 'application/pdf',
+        // Hati2 dengan spasi/plus. Simpan persis nama object yg kamu mau di GCS (tanpa urlencode).
+        // Sebaiknya ganti spasi menjadi %20 atau underscore saat MENENTUKAN KEY di sisi client.
+        // Yang penting: nama yg disign = nama yang di-request saat PUT (harus identik).
+        $headers = [
+            'content-type' => $contentType,
+            // GCS V4 + unsigned payload
             'x-goog-content-sha256' => 'UNSIGNED-PAYLOAD',
-        ],
-    ]);
+        ];
 
-    return response()->json([
-        'url'        => $url,
-        'key'        => $safeKey,
-        'method'     => 'PUT',
-        'headers'    => [
-            'Content-Type'          => 'application/pdf',
-            'x-goog-content-sha256' => 'UNSIGNED-PAYLOAD',
-        ],
-        'expires_in' => 300,
-    ]);
-}
+        $storage = new StorageClient([
+            'projectId'   => $project,
+            'keyFilePath' => $keyFile,
+        ]);
 
+        $bucketObj = $storage->bucket($bucket);
+        $object    = $bucketObj->object($key);
 
-return response()->json([
-    'url'        => $url,
-    'key'        => $safeKey,
-    'method'     => 'PUT',
-    'headers'    => [ // untuk info ke klien
-        'Content-Type'          => 'application/pdf',
-        'x-goog-content-sha256' => 'UNSIGNED-PAYLOAD',
-    ],
-    'expires_in' => 300,
-]);
+        // Expire 5 menit
+        $expiresAt = new \DateTimeImmutable('+5 minutes');
 
+        // Buat signed URL V4 PUT
+        $url = $object->signedUrl($expiresAt, [
+            'version' => 'v4',
+            'method'  => 'PUT',
+            'headers' => $headers,
+        ]);
 
-        
-
+        return response()->json([
+            'url'     => $url,
+            'headers' => $headers,
+        ]);
     }
 
     // POST /api/presign/download  { key, filename?, disposition?(inline|attachment) }
