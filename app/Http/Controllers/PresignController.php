@@ -8,68 +8,53 @@ use RuntimeException;
 
 class PresignController extends Controller
 {
-    private function gcs(): StorageClient
+     public function upload(Request $req)
+    {
+        $key = $req->input('key');
+        $contentType = $req->input('contentType', 'application/octet-stream');
+
+        // pilih GCS
+        return $this->gcs($key, $contentType);
+    }
+
+    private function gcs(string $key, string $contentType)
     {
         $projectId = env('GCP_PROJECT_ID');
         $keyFile   = env('GCP_KEY_FILE');
+        $bucket    = env('GCP_BUCKET');
 
-        if (!$projectId || !$keyFile || !file_exists($keyFile)) {
-            throw new RuntimeException('GCP creds tidak valid. Cek GCP_PROJECT_ID / GCP_KEY_FILE.');
+        if (!$projectId || !$keyFile || !$bucket) {
+            throw new RuntimeException('GCP creds tidak valid. Cek GCP_PROJECT_ID / GCP_KEY_FILE / GCP_BUCKET.');
         }
-
-        return new StorageClient([
-            'projectId'   => $projectId,
-            'keyFilePath' => $keyFile,
-        ]);
-    }
-
-    // POST /api/presign/upload  { key: "nama.pdf", contentType: "application/pdf" }
-   // use Google\Cloud\Storage\StorageClient;
-
- public function upload(Request $req)
-    {
-        $key = $req->string('key')->toString();
-        $contentType = $req->string('contentType', 'application/octet-stream')->toString();
-
-        // Validasi env
-        $project = env('GCP_PROJECT_ID');
-        $keyFile = env('GCP_KEY_FILE');
-        $bucket  = env('GCS_BUCKET');
-        $signer  = env('GCS_SIGNING_EMAIL'); // harus sama dengan client_email di JSON
-
-        if (!$project || !$keyFile || !is_readable($keyFile) || !$bucket) {
-            throw new \RuntimeException('GCP creds tidak valid. Cek GCP_PROJECT_ID / GCP_KEY_FILE.');
+        if (!is_readable($keyFile)) {
+            throw new RuntimeException("GCP key tidak bisa dibaca: $keyFile");
         }
-
-        // Hati2 dengan spasi/plus. Simpan persis nama object yg kamu mau di GCS (tanpa urlencode).
-        // Sebaiknya ganti spasi menjadi %20 atau underscore saat MENENTUKAN KEY di sisi client.
-        // Yang penting: nama yg disign = nama yang di-request saat PUT (harus identik).
-        $headers = [
-            'content-type' => $contentType,
-            // GCS V4 + unsigned payload
-            'x-goog-content-sha256' => 'UNSIGNED-PAYLOAD',
-        ];
 
         $storage = new StorageClient([
-            'projectId'   => $project,
+            'projectId'   => $projectId,
             'keyFilePath' => $keyFile,
         ]);
 
         $bucketObj = $storage->bucket($bucket);
         $object    = $bucketObj->object($key);
 
-        // Expire 5 menit
-        $expiresAt = new \DateTimeImmutable('+5 minutes');
+        // header minimal – paling aman
+        $headers = [
+            'content-type' => $contentType,
+            // kalau mau pakai mode A (UNSIGNED-PAYLOAD), tambahkan:
+            // 'x-goog-content-sha256' => 'UNSIGNED-PAYLOAD',
+        ];
 
-        // Buat signed URL V4 PUT
-        $url = $object->signedUrl($expiresAt, [
+        $url = $object->signedUrl(new \DateTime('+10 minutes'), [
             'version' => 'v4',
             'method'  => 'PUT',
             'headers' => $headers,
         ]);
 
+        Log::info('PRESIGN', ['key' => $key, 'headers' => $headers, 'url' => $url]);
+
         return response()->json([
-            'url'     => $url,
+            'url' => $url,
             'headers' => $headers,
         ]);
     }
