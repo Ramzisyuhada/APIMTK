@@ -42,22 +42,31 @@ class PresignController extends Controller
         $bucket = $this->gcs()->bucket(env('GCS_BUCKET'));
         $object = $bucket->object($safeKey);
 
-        $url = $object->signedUrl(
-            now()->addMinutes(5)->toDateTime(),
-            [
-                'version'     => 'v4',
-                'method'      => 'PUT',
-                'contentType' => 'application/pdf',
-            ]
-        );
+     // PresignController.php (bagian upload)
+$url = $object->signedUrl(
+    now()->addMinutes(5)->toDateTime(),
+    [
+        'version'     => 'v4',
+        'method'      => 'PUT',
+        'contentType' => 'application/pdf',
+        'headers'     => [                         // ← WAJIB: ikut DISIGN
+            'content-type'           => 'application/pdf',
+            'x-goog-content-sha256'  => 'UNSIGNED-PAYLOAD',
+        ],
+    ]
+);
 
-        return response()->json([
-            'url'        => $url,
-            'key'        => $safeKey,
-            'method'     => 'PUT',
-            'headers'    => ['Content-Type' => 'application/pdf'],
-            'expires_in' => 300,
-        ]);
+return response()->json([
+    'url'        => $url,
+    'key'        => $safeKey,
+    'method'     => 'PUT',
+    'headers'    => [
+        'Content-Type'          => 'application/pdf',
+        'x-goog-content-sha256' => 'UNSIGNED-PAYLOAD',
+    ],
+    'expires_in' => 300,
+]);
+
     }
 
     // POST /api/presign/download  { key, filename?, disposition?(inline|attachment) }
