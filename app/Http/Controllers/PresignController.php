@@ -6,9 +6,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Google\Cloud\Storage\StorageClient;
 use RuntimeException;
+use Throwable;
 
 class PresignController extends Controller
 {
+    /**
+     * POST /api/presign/upload
+     * Body: { "key": "uploads/test.pdf", "contentType": "application/pdf" }
+     */
     public function upload(Request $req)
     {
         $data = $req->validate([
@@ -16,14 +21,30 @@ class PresignController extends Controller
             'contentType' => 'nullable|string',
         ]);
 
-        $key         = $data['key'];
-        $contentType = $data['contentType'] ?? 'application/octet-stream';
+        // Normalisasi & sanitasi key agar stabil untuk signing dan aman di URL
+        $key = $this->sanitizeKey($data['key']);
+        $contentType = $data['contentType'] ?? $this->guessContentTypeFromExt($key) ?? 'application/octet-stream';
 
-        // generate URL upload (PUT) ke GCS
-        return $this->presignUploadGcs($key, $contentType);
+        try {
+            return $this->presignUploadGcs($key, $contentType, 600); // 10 menit
+        } catch (Throwable $e) {
+            Log::error('PRESIGN_UPLOAD_GCS_ERROR', [
+                'key' => $key,
+                'contentType' => $contentType,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal membuat URL upload',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
     }
 
-    // POST /api/presign/download  { key, filename?, disposition?(inline|attachment) }
+    /**
+     * POST /api/presign/download
+     * Body: { "key": "uploads/test.pdf", "filename"?: "my.pdf", "disposition"?: "inline|attachment" }
+     */
     public function download(Request $req)
     {
         $data = $req->validate([
@@ -32,43 +53,70 @@ class PresignController extends Controller
             'disposition' => 'nullable|in:inline,attachment',
         ]);
 
-        [$storage, $bucket] = $this->makeGcs();
-        $object = $bucket->object($data['key']);
-
-        if (!$object->exists()) {
-            return response()->json(['success' => false, 'message' => 'File tidak ditemukan'], 404);
-        }
-
-        $filename    = $data['filename'] ?? basename($data['key']);
+        $key         = $this->sanitizeKey($data['key']);
+        $filename    = $data['filename'] ?? basename($key);
         $disposition = $data['disposition'] ?? 'attachment';
 
-        $url = $object->signedUrl(
-            now()->addMinutes(5)->toDateTime(),
-            [
-                'version'             => 'v4',
-                'method'              => 'GET',
-                'responseType'        => 'application/pdf', // optional, sesuaikan
-                'responseDisposition' => $disposition . '; filename="' . addslashes($filename) . '"',
-            ]
-        );
+        try {
+            [$storage, $bucket] = $this->makeGcs();
+            $object = $bucket->object($key);
 
-        return response()->json([
-            'success'    => true,
-            'url'        => $url,
-            'expires_in' => 300,
-        ]);
+            if (!$object->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File tidak ditemukan',
+                ], 404);
+            }
+
+            // Coba tebak content-type dari ekstensi, fallback PDF agar aman
+            $responseType = $this->guessContentTypeFromExt($filename) ?? 'application/pdf';
+
+            $url = $object->signedUrl(
+                now()->addMinutes(5)->toDateTime(), // 5 menit
+                [
+                    'version'             => 'v4',
+                    'method'              => 'GET',
+                    'responseType'        => $responseType,
+                    'responseDisposition' => $disposition . '; filename="' . addslashes($filename) . '"',
+                ]
+            );
+
+            return response()->json([
+                'success'    => true,
+                'url'        => $url,
+                'expires_in' => 300,
+                'key'        => $key,
+            ]);
+        } catch (Throwable $e) {
+            Log::error('PRESIGN_DOWNLOAD_GCS_ERROR', [
+                'key'   => $key,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal membuat URL download',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
     }
 
-    /** ---------- Helpers ---------- */
+    /* ====================== Helpers ====================== */
 
+    /**
+     * Inisialisasi StorageClient + Bucket.
+     * Env yang dipakai:
+     * - GOOGLE_CLOUD_PROJECT
+     * - GOOGLE_APPLICATION_CREDENTIALS
+     * - GOOGLE_CLOUD_STORAGE_BUCKET
+     */
     private function makeGcs(): array
     {
-        $projectId = env('GCP_PROJECT_ID');
-        $keyFile   = env('GCP_KEY_FILE');
-        $bucket    = env('GCP_BUCKET');
+        $projectId = env('GOOGLE_CLOUD_PROJECT') ?: env('GCP_PROJECT_ID');
+        $keyFile   = env('GOOGLE_APPLICATION_CREDENTIALS') ?: env('GCP_KEY_FILE');
+        $bucket    = env('GOOGLE_CLOUD_STORAGE_BUCKET') ?: env('GCP_BUCKET');
 
         if (!$projectId || !$keyFile || !$bucket) {
-            throw new RuntimeException('GCP creds tidak valid. Cek GCP_PROJECT_ID / GCP_KEY_FILE / GCP_BUCKET.');
+            throw new RuntimeException('GCP creds tidak valid. Cek GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS / GOOGLE_CLOUD_STORAGE_BUCKET.');
         }
         if (!is_readable($keyFile)) {
             throw new RuntimeException("GCP key tidak bisa dibaca: $keyFile");
@@ -87,30 +135,87 @@ class PresignController extends Controller
         return [$storage, $bucketObj];
     }
 
-    private function presignUploadGcs(string $key, string $contentType)
+    /**
+     * Membuat signed URL v4 untuk PUT upload.
+     */
+    private function presignUploadGcs(string $key, string $contentType, int $expiresSec)
     {
-        [$storage, $bucketObj] = $this->makeGcs();
-        $object = $bucketObj->object($key);
+        [$storage, $bucket] = $this->makeGcs();
+        $object = $bucket->object($key);
 
-        // header minimal untuk signed PUT (v4)
+        // Header yang HARUS konsisten saat client melakukan PUT
         $headers = [
-            'content-type' => $contentType,
-            // Jika ingin payload tidak di-hash oleh klien (opsional):
+            'Content-Type' => $contentType, // gunakan kapitalisasi standar
+            // Jika ingin tidak menghitung hash payload di klien:
             // 'x-goog-content-sha256' => 'UNSIGNED-PAYLOAD',
         ];
 
-        $url = $object->signedUrl(new \DateTime('+10 minutes'), [
-            'version' => 'v4',
-            'method'  => 'PUT',
-            'headers' => $headers,
-        ]);
+        $url = $object->signedUrl(
+            now()->addSeconds($expiresSec)->toDateTime(),
+            [
+                'version' => 'v4',
+                'method'  => 'PUT',
+                'headers' => $headers,
+            ]
+        );
 
         Log::info('PRESIGN_UPLOAD_GCS', ['key' => $key, 'headers' => $headers]);
 
         return response()->json([
+            'success' => true,
             'url'     => $url,
-            'headers' => $headers,
-            'expires' => 600,
+            'method'  => 'PUT',       // <-- tambahkan agar client mudah validasi
+            'headers' => $headers,    // <-- kunci header kapital
+            'expires' => $expiresSec,
+            'key'     => $key,
         ]);
+    }
+
+    /**
+     * Sanitasi key/path agar stabil dan aman:
+     * - Normalisasi separator
+     * - Bersihkan karakter berisiko pada filename
+     */
+    private function sanitizeKey(string $key): string
+    {
+        $key = trim($key);
+        $key = str_replace('\\', '/', $key);
+        $key = ltrim($key, '/'); // jangan leading slash
+
+        $dir = trim(dirname($key), '.\\/'); // "uploads"
+        $ext = pathinfo($key, PATHINFO_EXTENSION);
+        $base = pathinfo($key, PATHINFO_FILENAME);
+
+        // Ubah spasi, +, koma, dll jadi '-'
+        $base = preg_replace('/[^\p{L}\p{N}\.\-_]+/u', '-', $base);
+        $base = trim($base, '-_');
+
+        $clean = ($dir ? $dir.'/' : '') . ($base !== '' ? $base : 'file');
+        if ($ext !== '') {
+            $clean .= '.'.$ext;
+        }
+
+        return $clean;
+    }
+
+    /**
+     * Tebak Content-Type dari ekstensi file (sederhana).
+     */
+    private function guessContentTypeFromExt(string $key): ?string
+    {
+        $ext = strtolower(pathinfo($key, PATHINFO_EXTENSION));
+        return match ($ext) {
+            'pdf'  => 'application/pdf',
+            'png'  => 'image/png',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'webp' => 'image/webp',
+            'gif'  => 'image/gif',
+            'txt'  => 'text/plain',
+            'csv'  => 'text/csv',
+            'json' => 'application/json',
+            'zip'  => 'application/zip',
+            'mp4'  => 'video/mp4',
+            default => null,
+        };
     }
 }
