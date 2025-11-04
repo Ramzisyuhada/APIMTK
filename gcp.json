@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "bubbly-observer-452212-h9",
+  "private_key_id": "04c7dfc3201157bd5f8788754781f7c4988e76ee",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCxu0jVPG35N0WP\nncY0DK4PztMksEq16DzT1BESJUmWtbA2Poo8kYO0gwsxL0IBeZuKniJRmuCuNYgr\nYoBYQCrCTppzDs5nIzQ04OQIML1HPyZtPDRAf0otwcwPQruQHZleqkTFh6EinQpA\nwn0ctd4ivBU00alj+MpdOS3yZCjBgfa/4uI1NOieFerQHymQ+hM5ccFmIvnJqD/4\nKSBbdYNvNa5fA4cN/g4ygPVNj9ZMfQgEpznghy1ed55jicuKY3US5IUreqs2gKrS\nxM8O+4YZPm79/YCXIzwE3AzRKPmjLFcd8NOflsBC6Bpx32wCHQ00ljqngWZGnDLR\nsPAYjRUFAgMBAAECggEAAcMIhXdJjnc6Ik1UbKmqLrqZzzr20qIluuKBn3ttJP2n\nbIeRg+jcCbW5g62jQDPTaJFevQ5a/H8dWsi+2vZv4L3kvA/r2IvkdZhmdPT+u1kT\nPsaiV01WZT5kO8vT437XnrTzZOiOSV3jKcyDxFLCi/eaAjcIhdbZMrQMEji59V5v\nN0KQt/I2MOc5WcNncOYzRz4SOLBL4hX0NkGgOqdLz4jNl4aKAN5eyHNBz2BXj8FN\nqkRLDrxMt3CvA9GeyKMuJdzj9MXF31tAvCnQWjuf7rqjjFIB+18br/qDaLHr+9NY\nC4V4akw0qYSK3FM8AVJebZBieAqQrDTH8u4Fja9ZQQKBgQDd+jP5wJTzR+eXKxE1\nDzamrP9EX1qtAyYczPzjt0evmkgmMoz7Hk3WHGY/lUlVIFpKKhL75HCysv7SNm9J\nRgQvKZTH0sPDaRIKgyDOrFyuQTS7MrRKxRaTswZQ2iMMG4fIp//mr6Y82xaBSXZ/\n5z5xiK2BnAX/7E7eib1qxCHU8QKBgQDM+P7ohEhs81++1LMcti6JAiFDU8/S/spD\nIpFQ4/BvjC5eaAtJ1pWxQuDx5BYPpfMorc4rt0BVNNZFNrRYIjxJknly33RR4b3s\n2urbuGaPdln6m4S5SH254uWbLUV/CH+yxCdURPDKtLV4xEi+LRxw4MkN/c7rXlOS\np5XPQ4NxVQKBgQDATogC4lXooi3AKB6DMkfthEiuKlH7O5QkNW8NtPYU6vuApCDB\nWZKjYP0wLpxWdG3kfKjvswvztODQqzokZ9UuKr7rkuvoejmYA9xDUM4GZRVS7G2H\nrVGO6fUZzLG6RouPSgSIDTpe1IudvFA+JM9TOs7eT5ZfDpGReBEy0vJgcQKBgHHl\ntrf7sccg4cZHqRO+RFOLpHImI2iqfjgaAEfDsXo6mhWJmSQ5okqy0A554KxnWZv0\nIIl4Nb5jMuGZCVOkCn4Tb3seoiNR3li8OR9I82yqpks0mebfWkWtyEqXOHPjhBoR\nF42jFW5+RgzKfWV36cLrla05qP5vFt96Uiuu515VAoGBAICSIPTMlEZveUT3AW7k\nnU5BqjTXOLevJ85balbMWLhjwfoUAAL7saioHnQfhOFcctn2xgPTKYfSD4IilpRR\nnXgHBkHwdfpygcxubKW4xG4Nvwomvr4Z9t87rlOSJINqzYAxWMEVamIBipmauARJ\ni0j+V6EiT6x9Np5Uf+I7ISje\n-----END PRIVATE KEY-----\n",
+  "client_email": "laravel-storage@bubbly-observer-452212-h9.iam.gserviceaccount.com",
+  "client_id": "100822942054739410677",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/laravel-storage%40bubbly-observer-452212-h9.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
