@@ -24,37 +24,50 @@ class PresignController extends Controller
     }
 
     // POST /api/presign/upload  { key: "nama.pdf", contentType: "application/pdf" }
-    public function upload(Request $req)
-    {
-        $data = $req->validate([
-            'key'         => 'required|string',
-            'contentType' => 'required|string|in:application/pdf',
-        ]);
+   // use Google\Cloud\Storage\StorageClient;
 
-        if (!preg_match('/\.pdf$/i', $data['key'])) {
-            return response()->json(['error' => 'Key must end with .pdf'], 400);
-        }
+public function upload(Request $req)
+{
+    $data = $req->validate([
+        'key'         => 'required|string',
+        'contentType' => 'required|string|in:application/pdf',
+    ]);
 
-        $base    = basename($data['key']);
-        $safe    = preg_replace('/[^a-zA-Z0-9._-]/', '_', $base);
-        $safeKey = 'uploads/pdf/' . $safe;
+    // amankan nama file
+    $base    = basename($data['key']);
+    $safe    = preg_replace('/[^a-zA-Z0-9._-]/', '_', $base);
+    $safeKey = 'uploads/pdf/' . $safe;
 
-        $bucket = $this->gcs()->bucket(env('GCS_BUCKET'));
-        $object = $bucket->object($safeKey);
+    $storage = $this->gcs(); // method kamu sendiri
+    $bucket  = $storage->bucket(env('GCS_BUCKET'));
+    $object  = $bucket->object($safeKey);
 
-     // PresignController.php (bagian upload)
-$url = $object->signedUrl(
-    now()->addMinutes(5)->toDateTime(),
-    [
+    // pakai UTC biar aman
+    $expires = (new \DateTime('now', new \DateTimeZone('UTC')))
+                ->add(new \DateInterval('PT5M'));
+
+    // SIGN HANYA HEADER2 berikut (lowercase):
+    $url = $object->signedUrl($expires, [
         'version' => 'v4',
         'method'  => 'PUT',
-        // HAPUS 'contentType' => 'application/pdf',
-        'headers' => [ // semua lowercase; ini yang DISIGN
+        'headers' => [
             'content-type'          => 'application/pdf',
             'x-goog-content-sha256' => 'UNSIGNED-PAYLOAD',
         ],
-    ]
-);
+    ]);
+
+    return response()->json([
+        'url'        => $url,
+        'key'        => $safeKey,
+        'method'     => 'PUT',
+        'headers'    => [
+            'Content-Type'          => 'application/pdf',
+            'x-goog-content-sha256' => 'UNSIGNED-PAYLOAD',
+        ],
+        'expires_in' => 300,
+    ]);
+}
+
 
 return response()->json([
     'url'        => $url,
