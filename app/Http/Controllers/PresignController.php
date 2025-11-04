@@ -46,12 +46,12 @@ class PresignController extends Controller
 $url = $object->signedUrl(
     now()->addMinutes(5)->toDateTime(),
     [
-        'version'     => 'v4',
-        'method'      => 'PUT',
-        'contentType' => 'application/pdf',
-        'headers'     => [                         // ← WAJIB: ikut DISIGN
-            'content-type'           => 'application/pdf',
-            'x-goog-content-sha256'  => 'UNSIGNED-PAYLOAD',
+        'version' => 'v4',
+        'method'  => 'PUT',
+        // HAPUS 'contentType' => 'application/pdf',
+        'headers' => [ // semua lowercase; ini yang DISIGN
+            'content-type'          => 'application/pdf',
+            'x-goog-content-sha256' => 'UNSIGNED-PAYLOAD',
         ],
     ]
 );
@@ -60,12 +60,15 @@ return response()->json([
     'url'        => $url,
     'key'        => $safeKey,
     'method'     => 'PUT',
-    'headers'    => [
+    'headers'    => [ // untuk info ke klien
         'Content-Type'          => 'application/pdf',
         'x-goog-content-sha256' => 'UNSIGNED-PAYLOAD',
     ],
     'expires_in' => 300,
 ]);
+
+
+        
 
     }
 
