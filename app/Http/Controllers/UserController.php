@@ -15,6 +15,51 @@ class UserController extends Controller
     }
 
 
+
+    public function getRataRataGayaBelajar()
+{
+    // Hitung total user
+    $totalUsers = User::count();
+
+    if ($totalUsers === 0) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Tidak ada data user.',
+            'data'    => []
+        ], 404);
+    }
+
+    // Hitung jumlah tiap gaya belajar
+    $visualCount      = User::where('gayabelajar', 'Visual')->count();
+    $auditoryCount    = User::where('gayabelajar', 'Auditory')->count();
+    $kinestheticCount = User::where('gayabelajar', 'Kinesthetic')->count();
+
+    // Hitung rata-rata (persentase)
+    $visualAvg      = ($visualCount / $totalUsers) * 100;
+    $auditoryAvg    = ($auditoryCount / $totalUsers) * 100;
+    $kinestheticAvg = ($kinestheticCount / $totalUsers) * 100;
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Rata-rata gaya belajar berhasil dihitung',
+        'total_user' => $totalUsers,
+        'data' => [
+            'Visual'      => [
+                'jumlah' => $visualCount,
+                'persentase' => round($visualAvg, 2)
+            ],
+            'Auditory'    => [
+                'jumlah' => $auditoryCount,
+                'persentase' => round($auditoryAvg, 2)
+            ],
+            'Kinesthetic' => [
+                'jumlah' => $kinestheticCount,
+                'persentase' => round($kinestheticAvg, 2)
+            ],
+        ]
+    ], 200);
+}
+
        public function updateGayaBelajar(Request $request)
 {
     $data = $request->validate([
