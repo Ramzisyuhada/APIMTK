@@ -3,21 +3,65 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Google\Cloud\Storage\StorageClient;
 use RuntimeException;
 
 class PresignController extends Controller
 {
-     public function upload(Request $req)
+    public function upload(Request $req)
     {
-        $key = $req->input('key');
-        $contentType = $req->input('contentType', 'application/octet-stream');
+        $data = $req->validate([
+            'key'         => 'required|string',
+            'contentType' => 'nullable|string',
+        ]);
 
-        // pilih GCS
-        return $this->gcs($key, $contentType);
+        $key         = $data['key'];
+        $contentType = $data['contentType'] ?? 'application/octet-stream';
+
+        // generate URL upload (PUT) ke GCS
+        return $this->presignUploadGcs($key, $contentType);
     }
 
-    private function gcs(string $key, string $contentType)
+    // POST /api/presign/download  { key, filename?, disposition?(inline|attachment) }
+    public function download(Request $req)
+    {
+        $data = $req->validate([
+            'key'         => 'required|string',
+            'filename'    => 'nullable|string',
+            'disposition' => 'nullable|in:inline,attachment',
+        ]);
+
+        [$storage, $bucket] = $this->makeGcs();
+        $object = $bucket->object($data['key']);
+
+        if (!$object->exists()) {
+            return response()->json(['success' => false, 'message' => 'File tidak ditemukan'], 404);
+        }
+
+        $filename    = $data['filename'] ?? basename($data['key']);
+        $disposition = $data['disposition'] ?? 'attachment';
+
+        $url = $object->signedUrl(
+            now()->addMinutes(5)->toDateTime(),
+            [
+                'version'             => 'v4',
+                'method'              => 'GET',
+                'responseType'        => 'application/pdf', // optional, sesuaikan
+                'responseDisposition' => $disposition . '; filename="' . addslashes($filename) . '"',
+            ]
+        );
+
+        return response()->json([
+            'success'    => true,
+            'url'        => $url,
+            'expires_in' => 300,
+        ]);
+    }
+
+    /** ---------- Helpers ---------- */
+
+    private function makeGcs(): array
     {
         $projectId = env('GCP_PROJECT_ID');
         $keyFile   = env('GCP_KEY_FILE');
@@ -36,12 +80,22 @@ class PresignController extends Controller
         ]);
 
         $bucketObj = $storage->bucket($bucket);
-        $object    = $bucketObj->object($key);
+        if (!$bucketObj->exists()) {
+            throw new RuntimeException("GCS bucket tidak ditemukan atau tidak terakses: $bucket");
+        }
 
-        // header minimal – paling aman
+        return [$storage, $bucketObj];
+    }
+
+    private function presignUploadGcs(string $key, string $contentType)
+    {
+        [$storage, $bucketObj] = $this->makeGcs();
+        $object = $bucketObj->object($key);
+
+        // header minimal untuk signed PUT (v4)
         $headers = [
             'content-type' => $contentType,
-            // kalau mau pakai mode A (UNSIGNED-PAYLOAD), tambahkan:
+            // Jika ingin payload tidak di-hash oleh klien (opsional):
             // 'x-goog-content-sha256' => 'UNSIGNED-PAYLOAD',
         ];
 
@@ -51,47 +105,12 @@ class PresignController extends Controller
             'headers' => $headers,
         ]);
 
-        Log::info('PRESIGN', ['key' => $key, 'headers' => $headers, 'url' => $url]);
+        Log::info('PRESIGN_UPLOAD_GCS', ['key' => $key, 'headers' => $headers]);
 
         return response()->json([
-            'url' => $url,
+            'url'     => $url,
             'headers' => $headers,
-        ]);
-    }
-
-    // POST /api/presign/download  { key, filename?, disposition?(inline|attachment) }
-    public function download(Request $req)
-    {
-        $data = $req->validate([
-            'key'         => 'required|string',
-            'filename'    => 'nullable|string',
-            'disposition' => 'nullable|in:inline,attachment',
-        ]);
-
-        $bucket = $this->gcs()->bucket(env('GCS_BUCKET'));
-        $object = $bucket->object($data['key']);
-
-        if (!$object->exists()) {
-            return response()->json(['success' => false, 'message' => 'File tidak ditemukan'], 404);
-        }
-
-        $filename    = $data['filename'] ?? basename($data['key']);
-        $disposition = $data['disposition'] ?? 'attachment';
-
-        $url = $object->signedUrl(
-            now()->addMinutes(5)->toDateTime(),
-            [
-                'version'             => 'v4',
-                'method'              => 'GET',
-                'responseType'        => 'application/pdf',
-                'responseDisposition' => $disposition . '; filename="' . addslashes($filename) . '"',
-            ]
-        );
-
-        return response()->json([
-            'success'    => true,
-            'url'        => $url,
-            'expires_in' => 300,
+            'expires' => 600,
         ]);
     }
 }
