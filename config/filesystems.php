@@ -59,6 +59,16 @@ return [
             'throw' => false,
             'report' => false,
         ],
+     'gcs' => [
+            'driver'     => 'gcs',
+            'project_id' => env('GCP_PROJECT_ID', ''),
+            'bucket'     => env('GCP_BUCKET', ''),
+            // muat isi file JSON ke array agar aman dipakai Storage::extend
+            'key_file'   => env('GCP_KEY_FILE') && file_exists(env('GCP_KEY_FILE'))
+                ? json_decode(file_get_contents(env('GCP_KEY_FILE')), true)
+                : null,
+            'visibility' => 'public', // atau 'private' sesuai kebutuhan
+        ],
 
     ],
 
