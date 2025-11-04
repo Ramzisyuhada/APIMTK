@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Google\Cloud\Storage\StorageClient;
 use RuntimeException;
+use Aws\Exception\AwsException;   // <-- TAMBAHKAN
+use RuntimeException;             // <-- TAMBAHKAN
 
 class PresignController extends Controller
 {
